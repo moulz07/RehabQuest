@@ -947,6 +947,7 @@ MonoBehaviour:
   targetMissColor: {r: 1, g: 0.42, b: 0.32, a: 1}
   pointsPerTarget: 100
   streakBonus: 15
+  handSampleIntervalSeconds: 0.1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

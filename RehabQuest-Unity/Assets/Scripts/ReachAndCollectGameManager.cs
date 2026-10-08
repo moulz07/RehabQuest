@@ -1,4 +1,5 @@
 using System.Collections;
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -47,6 +48,9 @@ public class ReachAndCollectGameManager : MonoBehaviour
     [SerializeField] private int pointsPerTarget = 100;
     [SerializeField] private int streakBonus = 15;
 
+    [Header("Session Recording")]
+    [SerializeField] private float handSampleIntervalSeconds = 0.1f;
+
     private const string ReachAndCollectSceneName = "ReachAndCollect";
     private const string SampleSceneName = "SampleScene";
 
@@ -60,9 +64,14 @@ public class ReachAndCollectGameManager : MonoBehaviour
     private int spawnedTargets;
 
     private float sessionTimeRemaining;
+    private float sessionStartRealtime;
+    private float nextHandSampleTime;
 
     private Coroutine countdownRoutine;
     private Coroutine spawnRoutine;
+
+    private RehabQuestSessionResult currentSessionResult;
+    private ReachTargetResult activeTargetResult;
 
     private Canvas canvas;
 
@@ -143,6 +152,8 @@ public class ReachAndCollectGameManager : MonoBehaviour
             return;
         }
 
+        RecordPlayerHandSampleIfDue();
+
         UpdateHud();
     }
 
@@ -164,6 +175,15 @@ public class ReachAndCollectGameManager : MonoBehaviour
         {
             return;
         }
+
+        Vector3 recordedCollectionPosition =
+            playerHand != null
+                ? playerHand.position
+                : collectionPosition;
+
+        RecordTargetCollected(
+            recordedCollectionPosition
+        );
 
         successfulTargets++;
 
@@ -211,6 +231,8 @@ public class ReachAndCollectGameManager : MonoBehaviour
         {
             return;
         }
+
+        RecordTargetMissed();
 
         missedTargets++;
 
@@ -261,6 +283,10 @@ public class ReachAndCollectGameManager : MonoBehaviour
         spawnedTargets = 0;
 
         sessionTimeRemaining = sessionDurationSeconds;
+        currentSessionResult = null;
+        activeTargetResult = null;
+        sessionStartRealtime = 0f;
+        nextHandSampleTime = 0f;
 
         state = GameState.Countdown;
 
@@ -328,6 +354,7 @@ public class ReachAndCollectGameManager : MonoBehaviour
         countdownText.gameObject.SetActive(false);
 
         state = GameState.Playing;
+        BeginSessionRecording();
 
         feedbackText.text =
             "Reach for the target";
@@ -431,8 +458,18 @@ public class ReachAndCollectGameManager : MonoBehaviour
             targetPulseAmount
         );
 
+        Vector3 spawnPosition =
+            GetReachableSpawnPosition();
+
+        RecordTargetSpawned(
+            spawnedTargets,
+            spawnPosition,
+            lifetime,
+            diameter
+        );
+
         target.Activate(
-            GetReachableSpawnPosition(),
+            spawnPosition,
             diameter,
             targetColor
         );
@@ -453,12 +490,12 @@ public class ReachAndCollectGameManager : MonoBehaviour
         for (int attempt = 0; attempt < 20; attempt++)
         {
             candidate = new Vector3(
-                Random.Range(
+                UnityEngine.Random.Range(
                     spawnXBounds.x,
                     spawnXBounds.y
                 ),
                 targetHeight,
-                Random.Range(
+                UnityEngine.Random.Range(
                     spawnZBounds.x,
                     spawnZBounds.y
                 )
@@ -509,6 +546,8 @@ public class ReachAndCollectGameManager : MonoBehaviour
             countdownRoutine = null;
         }
 
+        RecordUnfinishedTarget();
+
         float timeUsed =
             sessionDurationSeconds -
             Mathf.Max(0f, sessionTimeRemaining);
@@ -529,12 +568,255 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
         UpdateHud();
 
-        Debug.Log(
-            $"Reach & Collect session complete. " +
-            $"Score={score}, " +
-            $"Success={successfulTargets}, " +
-            $"Missed={missedTargets}"
+        FinalizeSessionRecording(
+            timeUsed
         );
+
+        ExportSessionJson();
+
+        Debug.Log(
+            CreateSessionDebugSummary()
+        );
+    }
+
+
+    // =========================================================
+    // SESSION RECORDING
+    // =========================================================
+
+    private void BeginSessionRecording()
+    {
+        sessionStartRealtime =
+            Time.realtimeSinceStartup;
+
+        nextHandSampleTime =
+            sessionStartRealtime;
+
+        currentSessionResult =
+            new RehabQuestSessionResult
+            {
+                patientName = RehabQuestSessionData.PatientName,
+                patientAge = RehabQuestSessionData.PatientAge,
+                dominantHand = RehabQuestSessionData.DominantHand,
+                selectedExercise = RehabQuestSessionData.SelectedExercise,
+                selectedDifficulty = RehabQuestSessionData.SelectedDifficulty,
+                gameName = "Reach & Collect",
+                sessionStartTimeUtc = DateTime.UtcNow.ToString("o"),
+                totalTargets = totalTargets
+            };
+
+        RecordPlayerHandSampleIfDue();
+    }
+
+
+    private void RecordTargetSpawned(
+        int targetNumber,
+        Vector3 spawnPosition,
+        float lifetime,
+        float diameter)
+    {
+        if (currentSessionResult == null)
+        {
+            return;
+        }
+
+        activeTargetResult =
+            new ReachTargetResult
+            {
+                targetNumber = targetNumber,
+                spawnTimeSeconds = GetSessionElapsedSeconds(),
+                targetLifetimeSeconds = lifetime,
+                targetDiameter = diameter,
+                spawnPosition = new SerializableVector3(spawnPosition)
+            };
+
+        currentSessionResult.targetEvents.Add(
+            activeTargetResult
+        );
+    }
+
+
+    private void RecordTargetCollected(
+        Vector3 collectionPosition)
+    {
+        if (activeTargetResult == null)
+        {
+            return;
+        }
+
+        float elapsed =
+            GetSessionElapsedSeconds();
+
+        activeTargetResult.collected = true;
+        activeTargetResult.missed = false;
+        activeTargetResult.completionTimeSeconds = elapsed;
+        activeTargetResult.timeToCompleteSeconds =
+            Mathf.Max(
+                0f,
+                elapsed - activeTargetResult.spawnTimeSeconds
+            );
+        activeTargetResult.collectionPosition =
+            new SerializableVector3(collectionPosition);
+
+        activeTargetResult = null;
+    }
+
+
+    private void RecordTargetMissed()
+    {
+        if (activeTargetResult == null)
+        {
+            return;
+        }
+
+        float elapsed =
+            GetSessionElapsedSeconds();
+
+        activeTargetResult.collected = false;
+        activeTargetResult.missed = true;
+        activeTargetResult.completionTimeSeconds = elapsed;
+        activeTargetResult.timeToCompleteSeconds =
+            Mathf.Max(
+                0f,
+                elapsed - activeTargetResult.spawnTimeSeconds
+            );
+
+        activeTargetResult = null;
+    }
+
+
+    private void RecordUnfinishedTarget()
+    {
+        if (activeTargetResult == null)
+        {
+            return;
+        }
+
+        float elapsed =
+            GetSessionElapsedSeconds();
+
+        activeTargetResult.collected = false;
+        activeTargetResult.missed = true;
+        activeTargetResult.completionTimeSeconds = elapsed;
+        activeTargetResult.timeToCompleteSeconds =
+            Mathf.Max(
+                0f,
+                elapsed - activeTargetResult.spawnTimeSeconds
+            );
+
+        activeTargetResult = null;
+    }
+
+
+    private void RecordPlayerHandSampleIfDue()
+    {
+        if (
+            currentSessionResult == null ||
+            playerHand == null ||
+            handSampleIntervalSeconds <= 0f
+        )
+        {
+            return;
+        }
+
+        float now =
+            Time.realtimeSinceStartup;
+
+        if (now < nextHandSampleTime)
+        {
+            return;
+        }
+
+        currentSessionResult.playerHandSamples.Add(
+            new PlayerHandSample
+            {
+                timeSeconds = GetSessionElapsedSeconds(),
+                position = new SerializableVector3(
+                    playerHand.position
+                )
+            }
+        );
+
+        nextHandSampleTime =
+            now + handSampleIntervalSeconds;
+    }
+
+
+    private void FinalizeSessionRecording(
+        float timeUsed)
+    {
+        if (currentSessionResult == null)
+        {
+            return;
+        }
+
+        RecordPlayerHandSampleIfDue();
+
+        currentSessionResult.sessionDurationSeconds = timeUsed;
+        currentSessionResult.targetsSpawned = spawnedTargets;
+        currentSessionResult.targetsCollected = successfulTargets;
+        currentSessionResult.missedTargets = missedTargets;
+        currentSessionResult.score = score;
+        currentSessionResult.bestStreak = bestStreak;
+
+        RehabQuestSessionData.SetLatestReachAndCollectResult(
+            currentSessionResult
+        );
+    }
+
+
+    private void ExportSessionJson()
+    {
+        if (
+            RehabQuestSessionJsonExporter.TryExportReachAndCollectSession(
+                currentSessionResult,
+                out string savedPath
+            )
+        )
+        {
+            Debug.Log(
+                "Reach & Collect session JSON saved:\n" +
+                savedPath
+            );
+        }
+    }
+
+
+    private float GetSessionElapsedSeconds()
+    {
+        if (sessionStartRealtime <= 0f)
+        {
+            return 0f;
+        }
+
+        return Mathf.Max(
+            0f,
+            Time.realtimeSinceStartup - sessionStartRealtime
+        );
+    }
+
+
+    private string CreateSessionDebugSummary()
+    {
+        if (currentSessionResult == null)
+        {
+            return "Reach & Collect session result was not available.";
+        }
+
+        return
+            "Reach & Collect Session Result\n" +
+            "------------------------------\n" +
+            $"Game: {currentSessionResult.gameName}\n" +
+            $"Difficulty: {currentSessionResult.selectedDifficulty}\n" +
+            $"Targets: {currentSessionResult.totalTargets}\n" +
+            $"Spawned: {currentSessionResult.targetsSpawned}\n" +
+            $"Collected: {currentSessionResult.targetsCollected}\n" +
+            $"Missed: {currentSessionResult.missedTargets}\n" +
+            $"Score: {currentSessionResult.score}\n" +
+            $"Best Streak: {currentSessionResult.bestStreak}\n" +
+            $"Duration: {currentSessionResult.sessionDurationSeconds:0.0}s\n" +
+            "Hand Samples: " +
+            $"{currentSessionResult.playerHandSamples.Count}";
     }
 
 
@@ -1112,7 +1394,7 @@ public class ReachAndCollectGameManager : MonoBehaviour
         };
 
         return messages[
-            Random.Range(
+            UnityEngine.Random.Range(
                 0,
                 messages.Length
             )
@@ -1428,6 +1710,13 @@ public class ReachAndCollectGameManager : MonoBehaviour
                 targetLifetimeSeconds
             );
 
+        minimumTargetLifetimeSeconds =
+            Mathf.Clamp(
+                minimumTargetLifetimeSeconds,
+                1f,
+                targetLifetimeSeconds
+            );
+
 
         targetDiameter =
             Mathf.Max(
@@ -1448,6 +1737,13 @@ public class ReachAndCollectGameManager : MonoBehaviour
             Mathf.Max(
                 0f,
                 minimumDistanceFromHand
+            );
+
+
+        handSampleIntervalSeconds =
+            Mathf.Max(
+                0.02f,
+                handSampleIntervalSeconds
             );
     }
 }

@@ -5,6 +5,7 @@ public static class RehabQuestSessionData
     public static string DominantHand { get; private set; } = "";
     public static string SelectedExercise { get; private set; } = "";
     public static string SelectedDifficulty { get; private set; } = "Easy";
+    public static RehabQuestSessionResult LatestReachAndCollectResult { get; private set; }
 
     public static bool HasPatientDetails =>
         !string.IsNullOrWhiteSpace(PatientName) &&
@@ -27,5 +28,11 @@ public static class RehabQuestSessionData
     {
         SelectedExercise = selectedExercise;
         SelectedDifficulty = selectedDifficulty;
+    }
+
+    public static void SetLatestReachAndCollectResult(
+        RehabQuestSessionResult sessionResult)
+    {
+        LatestReachAndCollectResult = sessionResult;
     }
 }
