@@ -22,17 +22,18 @@ public class ReachAndCollectGameManager : MonoBehaviour
     [SerializeField] private int totalTargets = 12;
     [SerializeField] private float sessionDurationSeconds = 60f;
     [SerializeField] private float countdownSeconds = 3f;
-    [SerializeField] private float targetLifetimeSeconds = 5f;
+    [SerializeField] private float targetLifetimeSeconds = 8f;
+    [SerializeField] private float minimumTargetLifetimeSeconds = 6.5f;
 
     [Header("Spawn Area")]
-    [SerializeField] private Vector2 spawnXBounds = new Vector2(-2.05f, 2.05f);
-    [SerializeField] private Vector2 spawnZBounds = new Vector2(-2.05f, 2.05f);
+    [SerializeField] private Vector2 spawnXBounds = new Vector2(-1.65f, 1.65f);
+    [SerializeField] private Vector2 spawnZBounds = new Vector2(-1.55f, 1.75f);
     [SerializeField] private float targetHeight = 1f;
-    [SerializeField] private float minimumDistanceFromHand = 0.75f;
+    [SerializeField] private float minimumDistanceFromHand = 0.45f;
 
     [Header("Target Visuals")]
-    [SerializeField] private float targetDiameter = 0.55f;
-    [SerializeField] private float minimumTargetDiameter = 0.38f;
+    [SerializeField] private float targetDiameter = 0.70f;
+    [SerializeField] private float minimumTargetDiameter = 0.55f;
     [SerializeField] private float targetPulseSpeed = 5f;
     [SerializeField] private float targetPulseAmount = 0.12f;
 
@@ -402,16 +403,30 @@ public class ReachAndCollectGameManager : MonoBehaviour
                 : (float)(spawnedTargets - 1)
                     / (totalTargets - 1);
 
+        float difficultyProgress =
+            Mathf.SmoothStep(
+                0f,
+                1f,
+                progress
+            );
+
         float diameter =
             Mathf.Lerp(
                 targetDiameter,
                 minimumTargetDiameter,
-                progress
+                difficultyProgress
+            );
+
+        float lifetime =
+            Mathf.Lerp(
+                targetLifetimeSeconds,
+                minimumTargetLifetimeSeconds,
+                difficultyProgress
             );
 
         target.Configure(
             this,
-            targetLifetimeSeconds,
+            lifetime,
             targetPulseSpeed,
             targetPulseAmount
         );

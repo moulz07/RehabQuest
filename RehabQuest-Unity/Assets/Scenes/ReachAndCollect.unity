@@ -884,6 +884,69 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &910000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 910000002}
+  - component: {fileID: 910000003}
+  m_Layer: 0
+  m_Name: ReachAndCollectGameManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &910000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 910000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &910000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 910000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e27a09e5e1d642e8ad58354a25fc4f81, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ReachAndCollectGameManager
+  playerHand: {fileID: 0}
+  target: {fileID: 0}
+  totalTargets: 12
+  sessionDurationSeconds: 60
+  countdownSeconds: 3
+  targetLifetimeSeconds: 8
+  minimumTargetLifetimeSeconds: 6.5
+  spawnXBounds: {x: -1.65, y: 1.65}
+  spawnZBounds: {x: -1.55, y: 1.75}
+  targetHeight: 1
+  minimumDistanceFromHand: 0.45
+  targetDiameter: 0.7
+  minimumTargetDiameter: 0.55
+  targetPulseSpeed: 5
+  targetPulseAmount: 0.12
+  targetColor: {r: 0.15, g: 0.95, b: 0.75, a: 1}
+  targetMissColor: {r: 1, g: 0.42, b: 0.32, a: 1}
+  pointsPerTarget: 100
+  streakBonus: 15
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
