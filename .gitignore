@@ -3,3 +3,19 @@ __pycache__/
 *.pyc
 .vscode/
 .env
+
+# Unity generated folders
+RehabQuest-Unity/Library/
+RehabQuest-Unity/Temp/
+RehabQuest-Unity/Logs/
+RehabQuest-Unity/obj/
+RehabQuest-Unity/Build/
+RehabQuest-Unity/Builds/
+RehabQuest-Unity/UserSettings/
+
+# Unity generated files
+RehabQuest-Unity/*.csproj
+RehabQuest-Unity/*.sln
+RehabQuest-Unity/*.slnx
+RehabQuest-Unity/*.userprefs
+RehabQuest-Unity/.vs/
