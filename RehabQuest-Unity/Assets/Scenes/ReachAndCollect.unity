@@ -423,6 +423,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26404bdadf74cf441a7599d994b4303f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UnityPythonClient
+  playerHand: {fileID: 0}
+  xBounds: {x: -2.25, y: 2.25}
+  zBounds: {x: -2.25, y: 2.25}
+  handHeight: 1
+  inputXBounds: {x: 0, y: 1}
+  inputYBounds: {x: 0, y: 1}
+  smoothingStrength: 6
+  reconnectDelaySeconds: 2
 --- !u!4 &258593558
 Transform:
   m_ObjectHideFlags: 0
