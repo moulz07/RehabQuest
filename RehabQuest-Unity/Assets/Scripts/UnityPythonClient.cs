@@ -246,20 +246,24 @@ public class UnityPythonClient : MonoBehaviour
             Debug.LogWarning($"Malformed wrist JSON received: {message}. Error: {e.Message}");
         }
     }
-
     private Vector3 MapWristToWorld(Vector2 wrist)
     {
-        // Calibration expands the configured webcam range back to 0..1.
-        // Values outside that range are clamped so the hand stays on the floor.
         float calibratedX = CalibrateInput(wrist.x, inputXBounds);
-        float calibratedY = CalibrateInput(wrist.y, inputYBounds);
 
-        float worldX = Mathf.Lerp(xBounds.x, xBounds.y, calibratedX);
-        float invertedY = 1f - calibratedY;
-        float worldZ = Mathf.Lerp(zBounds.x, zBounds.y, invertedY);
+        float worldX = Mathf.Lerp(
+            xBounds.x,
+            xBounds.y,
+            calibratedX
+        );
+
+        // Keep PlayerHand at its existing depth.
+        float worldZ = playerHand != null
+            ? playerHand.position.z
+            : 0f;
 
         return new Vector3(worldX, handHeight, worldZ);
     }
+
 
     private float CalibrateInput(float value, Vector2 inputBounds)
     {

@@ -91,6 +91,7 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
     private Text completionTitleText;
     private Text completionSummaryText;
+    private Text completionExportText;
 
 
     // =========================================================
@@ -480,10 +481,9 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
     private Vector3 GetReachableSpawnPosition()
     {
-        Vector3 handPosition =
-            playerHand != null
-                ? playerHand.position
-                : Vector3.zero;
+        Vector3 handPosition = playerHand != null
+            ? playerHand.position
+            : Vector3.zero;
 
         Vector3 candidate = Vector3.zero;
 
@@ -495,18 +495,11 @@ public class ReachAndCollectGameManager : MonoBehaviour
                     spawnXBounds.y
                 ),
                 targetHeight,
-                UnityEngine.Random.Range(
-                    spawnZBounds.x,
-                    spawnZBounds.y
-                )
+                0f
             );
 
-            if (
-                Vector3.Distance(
-                    candidate,
-                    handPosition
-                ) >= minimumDistanceFromHand
-            )
+            if (Vector3.Distance(candidate, handPosition)
+                >= minimumDistanceFromHand)
             {
                 return candidate;
             }
@@ -552,17 +545,6 @@ public class ReachAndCollectGameManager : MonoBehaviour
             sessionDurationSeconds -
             Mathf.Max(0f, sessionTimeRemaining);
 
-        completionTitleText.text = heading;
-
-        completionSummaryText.text =
-            $"Score: {score}\n" +
-            $"Targets collected: {successfulTargets} / {totalTargets}\n" +
-            $"Missed targets: {missedTargets}\n" +
-            $"Best streak: {bestStreak}\n" +
-            $"Time used: {timeUsed:0}s";
-
-        completionPanel.SetActive(true);
-
         feedbackText.text =
             "Session complete";
 
@@ -572,7 +554,8 @@ public class ReachAndCollectGameManager : MonoBehaviour
             timeUsed
         );
 
-        ExportSessionJson();
+        bool exportSucceeded = ExportSessionJson(out string exportedPath);
+        ShowCompletionResults(heading, exportSucceeded, exportedPath);
 
         Debug.Log(
             CreateSessionDebugSummary()
@@ -765,20 +748,59 @@ public class ReachAndCollectGameManager : MonoBehaviour
     }
 
 
-    private void ExportSessionJson()
+    private bool ExportSessionJson(out string savedPath)
     {
-        if (
+        bool exportSucceeded =
             RehabQuestSessionJsonExporter.TryExportReachAndCollectSession(
                 currentSessionResult,
-                out string savedPath
-            )
-        )
+                out savedPath
+            );
+
+        if (exportSucceeded)
         {
             Debug.Log(
                 "Reach & Collect session JSON saved:\n" +
                 savedPath
             );
         }
+
+        return exportSucceeded;
+    }
+
+
+    private void ShowCompletionResults(
+        string heading,
+        bool exportSucceeded,
+        string exportedPath)
+    {
+        RehabQuestSessionResult result = currentSessionResult;
+
+        completionTitleText.text = "Session Results — " + heading;
+        completionSummaryText.text = result == null
+            ? "Session result data is unavailable."
+            : $"Patient: {DisplayValue(result.patientName)}   |   Age: {result.patientAge}\n" +
+              $"Dominant hand: {DisplayValue(result.dominantHand)}   |   Difficulty: {DisplayValue(result.selectedDifficulty)}\n\n" +
+              $"Session duration: {result.sessionDurationSeconds:0.0}s\n" +
+              $"Score: {result.score}\n" +
+              $"Targets collected: {result.targetsCollected}\n" +
+              $"Targets missed: {result.missedTargets}\n" +
+              $"Total targets: {result.totalTargets}\n" +
+              $"Best streak: {result.bestStreak}";
+
+        completionExportText.text = exportSucceeded
+            ? "Session JSON exported successfully:\n" + exportedPath
+            : "Session JSON export failed.";
+        completionExportText.color = exportSucceeded
+            ? new Color(0.3f, 1f, 0.65f)
+            : new Color(1f, 0.55f, 0.45f);
+
+        completionPanel.SetActive(true);
+    }
+
+
+    private string DisplayValue(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
     }
 
 
@@ -1196,7 +1218,7 @@ public class ReachAndCollectGameManager : MonoBehaviour
     {
         completionPanel =
             CreatePanel(
-                "Completion Panel",
+                "Results Panel",
                 canvas.transform,
                 new Color(
                     0.04f,
@@ -1210,10 +1232,10 @@ public class ReachAndCollectGameManager : MonoBehaviour
             completionPanel.GetComponent<RectTransform>();
 
         panelRect.anchorMin =
-            new Vector2(0.32f, 0.22f);
+            new Vector2(0.16f, 0.08f);
 
         panelRect.anchorMax =
-            new Vector2(0.68f, 0.74f);
+            new Vector2(0.84f, 0.92f);
 
         panelRect.offsetMin =
             Vector2.zero;
@@ -1224,7 +1246,7 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
         completionTitleText =
             CreateText(
-                "Completion Title",
+                "Results Title",
                 completionPanel.transform,
                 "Exercise Complete",
                 34,
@@ -1234,25 +1256,42 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
         SetRect(
             completionTitleText.rectTransform,
-            new Vector2(0.08f, 0.78f),
-            new Vector2(0.92f, 0.94f)
+            new Vector2(0.08f, 0.88f),
+            new Vector2(0.92f, 0.98f)
         );
 
 
         completionSummaryText =
             CreateText(
-                "Completion Summary",
+                "Results Summary",
                 completionPanel.transform,
                 "",
-                22,
+                20,
                 FontStyle.Normal,
                 TextAnchor.UpperLeft
             );
 
         SetRect(
             completionSummaryText.rectTransform,
-            new Vector2(0.12f, 0.34f),
-            new Vector2(0.88f, 0.76f)
+            new Vector2(0.1f, 0.34f),
+            new Vector2(0.9f, 0.86f)
+        );
+
+
+        completionExportText =
+            CreateText(
+                "Export Status",
+                completionPanel.transform,
+                "",
+                14,
+                FontStyle.Normal,
+                TextAnchor.MiddleLeft
+            );
+
+        SetRect(
+            completionExportText.rectTransform,
+            new Vector2(0.1f, 0.22f),
+            new Vector2(0.9f, 0.33f)
         );
 
 
@@ -1265,8 +1304,8 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
         SetRect(
             restartButton.GetComponent<RectTransform>(),
-            new Vector2(0.12f, 0.12f),
-            new Vector2(0.46f, 0.26f)
+            new Vector2(0.12f, 0.06f),
+            new Vector2(0.46f, 0.18f)
         );
 
         restartButton.onClick.AddListener(
@@ -1283,8 +1322,8 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
         SetRect(
             menuButton.GetComponent<RectTransform>(),
-            new Vector2(0.54f, 0.12f),
-            new Vector2(0.88f, 0.26f)
+            new Vector2(0.54f, 0.06f),
+            new Vector2(0.88f, 0.18f)
         );
 
         menuButton.onClick.AddListener(
