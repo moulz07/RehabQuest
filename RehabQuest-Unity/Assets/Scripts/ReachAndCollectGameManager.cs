@@ -135,6 +135,18 @@ public class ReachAndCollectGameManager : MonoBehaviour
 
     private void Start()
     {
+        string missingSetupFields = RehabQuestSessionData.GetMissingSetupFields();
+        if (!string.IsNullOrEmpty(missingSetupFields))
+        {
+            Debug.LogError(
+                "Reach & Collect cannot start because setup information is missing: " +
+                missingSetupFields +
+                ". Return to SampleScene and complete Patient Setup and Exercise Selection."
+            );
+            SceneManager.LoadScene(SampleSceneName);
+            return;
+        }
+
         RestartSession();
     }
 
@@ -583,6 +595,7 @@ public class ReachAndCollectGameManager : MonoBehaviour
                 dominantHand = RehabQuestSessionData.DominantHand,
                 selectedExercise = RehabQuestSessionData.SelectedExercise,
                 selectedDifficulty = RehabQuestSessionData.SelectedDifficulty,
+                isTestSession = RehabQuestSessionData.IsTestSession,
                 gameName = "Reach & Collect",
                 sessionStartTimeUtc = DateTime.UtcNow.ToString("o"),
                 totalTargets = totalTargets

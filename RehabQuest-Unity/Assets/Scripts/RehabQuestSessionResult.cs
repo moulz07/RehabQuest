@@ -11,6 +11,7 @@ public class RehabQuestSessionResult
     public string dominantHand;
     public string selectedExercise;
     public string selectedDifficulty;
+    public bool isTestSession;
     public string gameName;
     public string sessionStartTimeUtc;
     public string exportedJsonPath;

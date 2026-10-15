@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -9,6 +14,7 @@ public class RehabQuestMenuManager : MonoBehaviour
     private enum MenuScreen
     {
         Dashboard,
+        SessionHistory,
         PatientSetup,
         ExerciseSelection
     }
@@ -16,6 +22,8 @@ public class RehabQuestMenuManager : MonoBehaviour
     private const string MenuSceneName = "SampleScene";
     private const string ReachAndCollectSceneName = "ReachAndCollect";
     private const string ExerciseReachAndCollect = "Reach & Collect";
+    private const string SessionFolderName = "RehabQuestSessions";
+    private const string SessionFilePattern = "reach_and_collect_session_*.json";
 
     private readonly Color backgroundColor = new Color(0.035f, 0.06f, 0.095f);
     private readonly Color panelColor = new Color(0.07f, 0.105f, 0.145f, 0.94f);
@@ -29,6 +37,17 @@ public class RehabQuestMenuManager : MonoBehaviour
     private GameObject dashboardPanel;
     private GameObject patientPanel;
     private GameObject exercisePanel;
+    private GameObject historyPanel;
+    private Transform historyListContent;
+    private Text historyStatusText;
+    private Text historyDetailsText;
+
+    private sealed class HistoryEntry
+    {
+        public string filePath;
+        public RehabQuestSessionResult result;
+        public HashSet<string> fields;
+    }
 
     private InputField patientNameInput;
     private InputField ageInput;
@@ -86,6 +105,7 @@ public class RehabQuestMenuManager : MonoBehaviour
     {
         canvas = CreateCanvas();
         BuildDashboard();
+        BuildSessionHistory();
         BuildPatientSetup();
         BuildExerciseSelection();
     }
@@ -93,6 +113,12 @@ public class RehabQuestMenuManager : MonoBehaviour
     private void ShowDashboard()
     {
         ShowScreen(MenuScreen.Dashboard);
+    }
+
+    private void ShowSessionHistory()
+    {
+        ShowScreen(MenuScreen.SessionHistory);
+        RefreshSessionHistory();
     }
 
     private void ShowPatientSetup()
@@ -115,6 +141,7 @@ public class RehabQuestMenuManager : MonoBehaviour
     private void ShowScreen(MenuScreen screen)
     {
         dashboardPanel.SetActive(screen == MenuScreen.Dashboard);
+        historyPanel.SetActive(screen == MenuScreen.SessionHistory);
         patientPanel.SetActive(screen == MenuScreen.PatientSetup);
         exercisePanel.SetActive(screen == MenuScreen.ExerciseSelection);
     }
@@ -183,6 +210,14 @@ public class RehabQuestMenuManager : MonoBehaviour
         SceneManager.LoadScene(ReachAndCollectSceneName);
     }
 
+    private void StartTestSession()
+    {
+        RehabQuestSessionData.SetPatientDetails("Test Patient", 25, "Right");
+        RehabQuestSessionData.SetTestSession(true);
+        selectedDifficulty = "Easy";
+        StartReachAndCollect();
+    }
+
     private void BuildDashboard()
     {
         dashboardPanel = CreateFullScreenPanel("Dashboard Panel");
@@ -241,8 +276,12 @@ public class RehabQuestMenuManager : MonoBehaviour
             accentColor
         );
 
-        SetRect(startButton.GetComponent<RectTransform>(), new Vector2(0.28f, 0.34f), new Vector2(0.72f, 0.45f));
+        SetRect(startButton.GetComponent<RectTransform>(), new Vector2(0.28f, 0.42f), new Vector2(0.72f, 0.52f));
         startButton.onClick.AddListener(ShowPatientSetup);
+
+        Button testSessionButton = CreateButton("Test Session Button", heroCard.transform, "Test Session", secondaryAccentColor);
+        SetRect(testSessionButton.GetComponent<RectTransform>(), new Vector2(0.28f, 0.29f), new Vector2(0.72f, 0.39f));
+        testSessionButton.onClick.AddListener(StartTestSession);
 
         Button historyButton = CreateButton(
             "Session History Button",
@@ -251,8 +290,8 @@ public class RehabQuestMenuManager : MonoBehaviour
             secondaryAccentColor
         );
 
-        SetRect(historyButton.GetComponent<RectTransform>(), new Vector2(0.22f, 0.2f), new Vector2(0.47f, 0.3f));
-        historyButton.interactable = false;
+        SetRect(historyButton.GetComponent<RectTransform>(), new Vector2(0.22f, 0.16f), new Vector2(0.47f, 0.26f));
+        historyButton.onClick.AddListener(ShowSessionHistory);
 
         Button settingsButton = CreateButton(
             "Settings Button",
@@ -261,7 +300,7 @@ public class RehabQuestMenuManager : MonoBehaviour
             secondaryAccentColor
         );
 
-        SetRect(settingsButton.GetComponent<RectTransform>(), new Vector2(0.53f, 0.2f), new Vector2(0.78f, 0.3f));
+        SetRect(settingsButton.GetComponent<RectTransform>(), new Vector2(0.53f, 0.16f), new Vector2(0.78f, 0.26f));
         settingsButton.interactable = false;
 
         Text statusText = CreateText(
@@ -274,7 +313,237 @@ public class RehabQuestMenuManager : MonoBehaviour
         );
 
         statusText.color = accentColor;
-        SetRect(statusText.rectTransform, new Vector2(0.18f, 0.08f), new Vector2(0.82f, 0.16f));
+        SetRect(statusText.rectTransform, new Vector2(0.18f, 0.05f), new Vector2(0.82f, 0.12f));
+    }
+
+    private void BuildSessionHistory()
+    {
+        historyPanel = CreateFullScreenPanel("Session History Panel");
+
+        Text title = CreateText("Session History Title", historyPanel.transform,
+            "Session History", 42, FontStyle.Bold, TextAnchor.MiddleCenter);
+        title.color = accentColor;
+        SetRect(title.rectTransform, new Vector2(0.2f, 0.87f), new Vector2(0.8f, 0.97f));
+
+        historyStatusText = CreateText("Session History Status", historyPanel.transform,
+            "", 17, FontStyle.Normal, TextAnchor.MiddleCenter);
+        historyStatusText.color = mutedTextColor;
+        SetRect(historyStatusText.rectTransform, new Vector2(0.1f, 0.81f), new Vector2(0.9f, 0.87f));
+
+        GameObject listCard = CreatePanel("Session History List", historyPanel.transform, panelColor);
+        SetRect(listCard.GetComponent<RectTransform>(), new Vector2(0.06f, 0.18f), new Vector2(0.44f, 0.79f));
+        CreateScrollArea("Session List Scroll", listCard.transform,
+            new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.96f), out historyListContent);
+
+        GameObject detailCard = CreatePanel("Session Details Card", historyPanel.transform, panelColor);
+        SetRect(detailCard.GetComponent<RectTransform>(), new Vector2(0.48f, 0.18f), new Vector2(0.94f, 0.79f));
+        historyDetailsText = CreateText("Session Details", detailCard.transform,
+            "Select a session to view its details.", 18, FontStyle.Normal, TextAnchor.UpperLeft);
+        historyDetailsText.color = Color.white;
+        historyDetailsText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        historyDetailsText.verticalOverflow = VerticalWrapMode.Overflow;
+        SetRect(historyDetailsText.rectTransform, new Vector2(0.06f, 0.05f), new Vector2(0.94f, 0.95f));
+
+        Button backButton = CreateButton("History Back Button", historyPanel.transform,
+            "Back", secondaryAccentColor);
+        SetRect(backButton.GetComponent<RectTransform>(), new Vector2(0.06f, 0.06f), new Vector2(0.2f, 0.14f));
+        backButton.onClick.AddListener(ShowDashboard);
+
+        historyPanel.SetActive(false);
+    }
+
+    private void RefreshSessionHistory()
+    {
+        ClearChildren(historyListContent);
+        historyDetailsText.text = "Select a session to view its details.";
+
+        if (string.IsNullOrWhiteSpace(Application.persistentDataPath))
+        {
+            historyStatusText.text = "Session storage is unavailable on this device.";
+            return;
+        }
+
+        string directory = Path.Combine(Application.persistentDataPath, SessionFolderName);
+        if (!Directory.Exists(directory))
+        {
+            historyStatusText.text = "No session history folder exists yet. Complete a session to create one.";
+            return;
+        }
+
+        string[] paths;
+        try
+        {
+            paths = Directory.GetFiles(directory, SessionFilePattern);
+        }
+        catch (Exception exception)
+        {
+            historyStatusText.text = "Could not read session history: " + exception.Message;
+            return;
+        }
+
+        Array.Sort(paths, StringComparer.Ordinal);
+        Array.Reverse(paths);
+
+        int loadedCount = 0;
+        int skippedCount = 0;
+        foreach (string path in paths)
+        {
+            try
+            {
+                string json = File.ReadAllText(path);
+                RehabQuestSessionResult result = JsonUtility.FromJson<RehabQuestSessionResult>(json);
+                HashSet<string> fields = ReadJsonFieldNames(json);
+                if (result == null ||
+                    (!fields.Contains("schemaVersion") &&
+                     !fields.Contains("sessionStartTimeUtc") &&
+                     !fields.Contains("patientName") &&
+                     !fields.Contains("selectedExercise")))
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                AddHistoryEntry(new HistoryEntry { filePath = path, result = result, fields = fields });
+                loadedCount++;
+            }
+            catch (Exception exception)
+            {
+                skippedCount++;
+                Debug.LogWarning("Skipping unreadable RehabQuest session file '" + path + "': " + exception.Message);
+            }
+        }
+
+        if (loadedCount == 0 && skippedCount == 0)
+        {
+            historyStatusText.text = "No saved sessions found. Complete a gameplay session and return here.";
+        }
+        else if (loadedCount == 0)
+        {
+            historyStatusText.text = "No readable sessions found. " + skippedCount + " file(s) could not be loaded.";
+        }
+        else
+        {
+            historyStatusText.text = loadedCount + " session(s) loaded" +
+                (skippedCount > 0 ? " · " + skippedCount + " unreadable file(s) skipped" : "");
+        }
+    }
+
+    private void AddHistoryEntry(HistoryEntry entry)
+    {
+        RehabQuestSessionResult result = entry.result;
+        DateTime sessionDate;
+        string dateLabel = HasField(entry, "sessionStartTimeUtc") &&
+            DateTime.TryParse(result.sessionStartTimeUtc, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out sessionDate)
+            ? sessionDate.ToLocalTime().ToString("g")
+            : File.GetLastWriteTime(entry.filePath).ToString("g");
+
+        string patient = FieldText(result.patientName);
+        string exercise = FieldText(result.selectedExercise);
+        string score = HasField(entry, "score") ? result.score.ToString() : "Not available";
+        string sessionType = HasField(entry, "isTestSession") && result.isTestSession ? " [TEST]" : "";
+        Button sessionButton = CreateButton("Session Entry", historyListContent,
+            dateLabel + sessionType + "\n" + patient + " · " + exercise + " · Score " + score,
+            secondaryAccentColor);
+        sessionButton.GetComponentInChildren<Text>().fontSize = 17;
+        sessionButton.GetComponentInChildren<Text>().alignment = TextAnchor.MiddleLeft;
+        LayoutElement layout = sessionButton.gameObject.AddComponent<LayoutElement>();
+        layout.minHeight = 82f;
+        layout.preferredHeight = 82f;
+        sessionButton.onClick.AddListener(() => ShowSessionDetails(entry, dateLabel));
+    }
+
+    private void ShowSessionDetails(HistoryEntry entry, string dateLabel)
+    {
+        RehabQuestSessionResult result = entry.result;
+        historyDetailsText.text =
+            "Session Details\n\n" +
+            "Date: " + dateLabel + "\n" +
+            "Patient: " + FieldText(result.patientName) + "\n" +
+            "Session type: " + (!HasField(entry, "isTestSession") ? "Unknown" : result.isTestSession ? "TEST" : "Normal") + "\n" +
+            "Age: " + (result.patientAge > 0 ? result.patientAge.ToString() : "Not available") + "\n" +
+            "Dominant hand: " + FieldText(result.dominantHand) + "\n\n" +
+            "Exercise: " + FieldText(result.selectedExercise) + "\n" +
+            "Difficulty: " + FieldText(result.selectedDifficulty) + "\n" +
+            "Status: Session recorded (gameplay ended)\n\n" +
+            "Score: " + (HasField(entry, "score") ? result.score.ToString() : "Not available") + "\n" +
+            "Targets collected: " + (HasField(entry, "targetsCollected") ? result.targetsCollected.ToString() : "Not available") + "\n" +
+            "Targets missed: " + (HasField(entry, "missedTargets") ? result.missedTargets.ToString() : "Not available") + "\n" +
+            "Targets spawned: " + (HasField(entry, "targetsSpawned") ? result.targetsSpawned.ToString() : "Not available") + "\n" +
+            "Total targets: " + (HasField(entry, "totalTargets") ? result.totalTargets.ToString() : "Not available") + "\n" +
+            "Best streak: " + (HasField(entry, "bestStreak") ? result.bestStreak.ToString() : "Not available") + "\n" +
+            "Duration: " + (HasField(entry, "sessionDurationSeconds") ? result.sessionDurationSeconds.ToString("0.0") + " s" : "Not available") + "\n" +
+            "Hand samples: " + (HasField(entry, "playerHandSamples") && result.playerHandSamples != null ? result.playerHandSamples.Count.ToString() : "Not available") + "\n" +
+            "Target events: " + (HasField(entry, "targetEvents") && result.targetEvents != null ? result.targetEvents.Count.ToString() : "Not available");
+    }
+
+    private static bool HasField(HistoryEntry entry, string fieldName)
+    {
+        return entry.fields.Contains(fieldName);
+    }
+
+    private static string FieldText(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            ? value
+            : "Not available";
+    }
+
+    private static HashSet<string> ReadJsonFieldNames(string json)
+    {
+        HashSet<string> names = new HashSet<string>();
+        MatchCollection matches = Regex.Matches(json, "\\\"([A-Za-z0-9_]+)\\\"\\s*:");
+        foreach (Match match in matches)
+        {
+            names.Add(match.Groups[1].Value);
+        }
+        return names;
+    }
+
+    private void CreateScrollArea(string name, Transform parent, Vector2 anchorMin,
+        Vector2 anchorMax, out Transform content)
+    {
+        GameObject viewport = new GameObject(name + " Viewport");
+        viewport.transform.SetParent(parent, false);
+        Image viewportImage = viewport.AddComponent<Image>();
+        viewportImage.color = new Color(1f, 1f, 1f, 0.015f);
+        RectTransform viewportRect = viewport.GetComponent<RectTransform>();
+        SetRect(viewportRect, anchorMin, anchorMax);
+        viewport.AddComponent<Mask>().showMaskGraphic = false;
+
+        GameObject contentObject = new GameObject(name + " Content", typeof(RectTransform));
+        contentObject.transform.SetParent(viewport.transform, false);
+        RectTransform contentRect = contentObject.GetComponent<RectTransform>();
+        contentRect.anchorMin = new Vector2(0f, 1f);
+        contentRect.anchorMax = new Vector2(1f, 1f);
+        contentRect.pivot = new Vector2(0.5f, 1f);
+        contentRect.anchoredPosition = Vector2.zero;
+        contentRect.sizeDelta = Vector2.zero;
+        VerticalLayoutGroup layout = contentObject.AddComponent<VerticalLayoutGroup>();
+        layout.spacing = 10f;
+        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+        ContentSizeFitter fitter = contentObject.AddComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        ScrollRect scroll = viewport.AddComponent<ScrollRect>();
+        scroll.viewport = viewportRect;
+        scroll.content = contentRect;
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        content = contentObject.transform;
+    }
+
+    private static void ClearChildren(Transform parent)
+    {
+        for (int index = parent.childCount - 1; index >= 0; index--)
+        {
+            Destroy(parent.GetChild(index).gameObject);
+        }
     }
 
     private void BuildPatientSetup()
