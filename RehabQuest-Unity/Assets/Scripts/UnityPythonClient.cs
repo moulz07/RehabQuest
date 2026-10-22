@@ -60,7 +60,27 @@ public class UnityPythonClient : MonoBehaviour
     private Vector2 latestWrist;
     private Vector3 smoothedPosition;
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void BootstrapUnityPythonClient()
+    {
+        UnityEngine.SceneManagement.Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        if (activeScene.name != "ReachAndCollect")
+        {
+            return;
+        }
+
+        if (FindFirstObjectByType<UnityPythonClient>() != null)
+        {
+            return;
+        }
+
+        GameObject clientObject = new GameObject("UnityPythonClient");
+        clientObject.AddComponent<UnityPythonClient>();
+        Debug.Log("UnityPythonClient bootstrapped automatically.");
+    }
+
     void Start()
+
     {
         if (playerHand == null)
         {

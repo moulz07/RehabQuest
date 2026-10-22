@@ -138,17 +138,17 @@ public class ReachAndCollectGameManager : MonoBehaviour
         string missingSetupFields = RehabQuestSessionData.GetMissingSetupFields();
         if (!string.IsNullOrEmpty(missingSetupFields))
         {
-            Debug.LogError(
-                "Reach & Collect cannot start because setup information is missing: " +
-                missingSetupFields +
-                ". Return to SampleScene and complete Patient Setup and Exercise Selection."
+            Debug.LogWarning(
+                "Reach & Collect launched directly. Initializing default session parameters: " +
+                missingSetupFields
             );
-            SceneManager.LoadScene(SampleSceneName);
-            return;
+            RehabQuestSessionData.SetPatientDetails("Alex Mercer", 30, "Right");
+            RehabQuestSessionData.SetExerciseSelection("Reach & Collect", "Medium");
         }
 
         RestartSession();
     }
+
 
     private void Update()
     {

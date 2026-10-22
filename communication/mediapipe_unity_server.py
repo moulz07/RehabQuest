@@ -35,7 +35,7 @@ server.bind((HOST, PORT))
 server.listen(1)
 
 print("----------------------------------------")
-print("REHABQUEST MEDIAPIPE → UNITY")
+print("REHABQUEST MEDIAPIPE -> UNITY")
 print("----------------------------------------")
 print("Waiting for Unity to connect...")
 
@@ -174,5 +174,5 @@ cv2.destroyAllWindows()
 
 print()
 print("----------------------------------------")
-print("MediaPipe → Unity connection stopped.")
+print("MediaPipe -> Unity connection stopped.")
 print("----------------------------------------")
