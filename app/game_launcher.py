@@ -20,18 +20,36 @@ APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
 
 SERVER_SCRIPT = (
-    PROJECT_ROOT / "communication" / "mediapipe_unity_server.py"
+    PROJECT_ROOT
+    / "communication"
+    / "mediapipe_unity_server.py"
 )
 
 PYTHON_EXE = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
 
-if not PYTHON_EXE.exists():
+if not PYTHON_EXE.is_file():
     PYTHON_EXE = Path(sys.executable)
 
-# Build your Unity game into this location.
 UNITY_EXE = (
-    PROJECT_ROOT / "unity_build" / "RehabQuest-Unity.exe"
+    PROJECT_ROOT
+    / "unity_build"
+    / "RehabQuest-Unity.exe"
 )
+
+UNITY_SESSION_FILENAME = "reach_and_collect_session_*.json"
+
+UNITY_SESSION_DIRS = [
+    Path.home()
+    / "AppData"
+    / "LocalLow"
+    / "DefaultCompany"
+    / "RehabQuest-Unity"
+    / "RehabQuestSessions",
+    PROJECT_ROOT / "RehabQuestSessions",
+    PROJECT_ROOT
+    / "RehabQuest-Unity"
+    / "RehabQuestSessions",
+]
 
 
 class GameLauncher(QObject):
@@ -48,23 +66,39 @@ class GameLauncher(QObject):
         self._user_id = "PATIENT_01"
         self._finishing = False
 
+        # Track session files so an old export is not imported
+        # accidentally when a new game produces no export.
+        self._session_files_before_launch = {}
+
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(500)
         self._poll_timer.timeout.connect(
             self._check_process_status
         )
 
+    # -----------------------------------------------------
+    # Launch
+    # -----------------------------------------------------
+
     def launch(self, game_id: str, user_id: str):
-        # Prevent launching another session while one is running.
+        """Start the tracking server and the requested Unity game."""
         if self._session_is_running():
-            print("[game_launcher] A session is already active.")
+            print(
+                "[game_launcher] A session is already active."
+            )
             return
 
-        # Validate the required files before launching anything.
         if not SERVER_SCRIPT.is_file():
             print(
                 "[game_launcher] Tracking server not found: "
                 f"{SERVER_SCRIPT}"
+            )
+            return
+
+        if not PYTHON_EXE.is_file():
+            print(
+                "[game_launcher] Python executable not found: "
+                f"{PYTHON_EXE}"
             )
             return
 
@@ -75,7 +109,7 @@ class GameLauncher(QObject):
             )
             print(
                 "[game_launcher] Build the Unity game and place "
-                "ReachAndCollect.exe at the configured path."
+                "RehabQuest-Unity.exe in unity_build."
             )
             return
 
@@ -83,8 +117,12 @@ class GameLauncher(QObject):
         self._user_id = user_id
         self._finishing = False
 
+        self._session_files_before_launch = (
+            self._snapshot_session_files()
+        )
+
         try:
-            # 1. Start the MediaPipe tracking server.
+            # Start the MediaPipe tracking server.
             flags = (
                 subprocess.CREATE_NEW_CONSOLE
                 if os.name == "nt"
@@ -102,19 +140,19 @@ class GameLauncher(QObject):
                 f"PID: {self._server_process.pid}"
             )
 
-            # 2. Launch Unity after a short startup interval.
-            # This gives the tracking server time to initialize.
+            # Give the tracking server time to initialize.
             QTimer.singleShot(1500, self._launch_unity)
 
         except Exception as exc:
             print(
-                f"[game_launcher] Failed to start tracking: {exc}"
+                "[game_launcher] Failed to start tracking: "
+                f"{exc}"
             )
             self._stop_server()
             self._reset_session()
 
     def _launch_unity(self):
-        # The session may have been stopped during the startup delay.
+        """Launch Unity after confirming tracking is still running."""
         if self._active_game_id is None or self._finishing:
             return
 
@@ -130,7 +168,6 @@ class GameLauncher(QObject):
             return
 
         try:
-            # 3. Launch the standalone Unity game.
             self._unity_process = subprocess.Popen(
                 [str(UNITY_EXE)],
                 cwd=str(UNITY_EXE.parent),
@@ -146,9 +183,14 @@ class GameLauncher(QObject):
 
         except Exception as exc:
             print(
-                f"[game_launcher] Failed to launch Unity: {exc}"
+                "[game_launcher] Failed to launch Unity: "
+                f"{exc}"
             )
             self._finish_session()
+
+    # -----------------------------------------------------
+    # Process monitoring
+    # -----------------------------------------------------
 
     def _session_is_running(self):
         return (
@@ -157,7 +199,10 @@ class GameLauncher(QObject):
         )
 
     def _check_process_status(self):
-        # The Unity game controls the end of the session.
+        """Detect Unity exit and unexpected tracking-server exit."""
+        if self._finishing:
+            return
+
         if (
             self._unity_process is not None
             and self._unity_process.poll() is not None
@@ -172,8 +217,6 @@ class GameLauncher(QObject):
             self._finish_session()
             return
 
-        # If tracking unexpectedly stops while Unity is running,
-        # report it in the console without ending the game.
         if (
             self._server_process is not None
             and self._server_process.poll() is not None
@@ -185,21 +228,33 @@ class GameLauncher(QObject):
                 "has stopped while Unity is still running."
             )
 
+    # -----------------------------------------------------
+    # Stop and cleanup
+    # -----------------------------------------------------
+
     def stop(self):
-        """Stop the Unity game and tracking server if necessary."""
+        """Stop the active game and tracking server."""
+        if self._active_game_id is None:
+            return
+
+        if self._finishing:
+            return
+
         self._finishing = True
         self._poll_timer.stop()
 
         self._stop_process(self._unity_process)
         self._stop_process(self._server_process)
 
+        game_id = self._active_game_id
+
         self._check_and_import_latest_session()
-        game_id = self._active_game_id or "reach_and_collect"
 
         self._reset_session()
         self.game_finished.emit(game_id)
 
     def _finish_session(self):
+        """Finish a session after Unity exits."""
         if self._finishing:
             return
 
@@ -208,10 +263,9 @@ class GameLauncher(QObject):
 
         game_id = self._active_game_id or "reach_and_collect"
 
-        # Unity has exited; stop tracking if it is still running.
+        # Stop tracking if it is still running.
         self._stop_process(self._server_process)
 
-        # Import the session recorded by Unity.
         self._check_and_import_latest_session()
 
         self._reset_session()
@@ -223,73 +277,126 @@ class GameLauncher(QObject):
 
     @staticmethod
     def _stop_process(process):
+        """Terminate a process and force-kill it if necessary."""
         if process is None or process.poll() is not None:
             return
 
         try:
             process.terminate()
-            process.wait(timeout=2)
+            process.wait(timeout=3)
 
         except subprocess.TimeoutExpired:
             process.kill()
-            process.wait(timeout=2)
+            process.wait(timeout=3)
 
         except Exception as exc:
-            print(f"[game_launcher] Process cleanup error: {exc}")
+            print(
+                "[game_launcher] Process cleanup error: "
+                f"{exc}"
+            )
 
     def _reset_session(self):
         self._server_process = None
         self._unity_process = None
         self._active_game_id = None
         self._finishing = False
+        self._session_files_before_launch = {}
 
-    def _check_and_import_latest_session(self):
-        userprofile = Path(
-            os.environ.get("USERPROFILE", str(Path.home()))
-        )
+    # -----------------------------------------------------
+    # Session discovery and import
+    # -----------------------------------------------------
 
-        search_dirs = [
-            userprofile
-            / "AppData"
-            / "LocalLow"
-            / "DefaultCompany"
-            / "RehabQuest-Unity"
-            / "RehabQuestSessions",
-            PROJECT_ROOT / "RehabQuestSessions",
-            userprofile / "AppData" / "LocalLow",
-        ]
+    def _snapshot_session_files(self):
+        """Record session file modification times before launch."""
+        snapshot = {}
 
-        found_files = []
-
-        for directory in search_dirs:
-            if not directory.exists():
+        for directory in UNITY_SESSION_DIRS:
+            if not directory.is_dir():
                 continue
 
             try:
-                for path in directory.rglob(
-                    "reach_and_collect_session_*.json"
+                for path in directory.glob(
+                    UNITY_SESSION_FILENAME
                 ):
                     if path.is_file():
-                        found_files.append(path)
+                        try:
+                            snapshot[str(path.resolve())] = (
+                                path.stat().st_mtime_ns
+                            )
+                        except OSError:
+                            continue
+
             except OSError as exc:
                 print(
                     "[game_launcher] Could not scan "
                     f"{directory}: {exc}"
                 )
 
-        if not found_files:
+        return snapshot
+
+    def _check_and_import_latest_session(self):
+        """Import the newest session file created or modified this run."""
+        candidates = []
+
+        for directory in UNITY_SESSION_DIRS:
+            if not directory.is_dir():
+                continue
+
+            try:
+                for path in directory.glob(
+                    UNITY_SESSION_FILENAME
+                ):
+                    if not path.is_file():
+                        continue
+
+                    try:
+                        modified_ns = path.stat().st_mtime_ns
+                    except OSError:
+                        continue
+
+                    previous_ns = (
+                        self._session_files_before_launch.get(
+                            str(path.resolve())
+                        )
+                    )
+
+                    # Ignore files that existed unchanged before
+                    # the current game was launched.
+                    if (
+                        previous_ns is not None
+                        and modified_ns <= previous_ns
+                    ):
+                        continue
+
+                    candidates.append(path)
+
+            except OSError as exc:
+                print(
+                    "[game_launcher] Could not scan "
+                    f"{directory}: {exc}"
+                )
+
+        if not candidates:
             print(
-                "[game_launcher] No Unity session JSON found."
+                "[game_launcher] No new or updated Unity session "
+                "JSON found for this run."
             )
             return
 
-        latest_file = max(
-            found_files,
-            key=lambda path: path.stat().st_mtime,
-        )
+        try:
+            latest_file = max(
+                candidates,
+                key=lambda path: path.stat().st_mtime_ns,
+            )
+        except OSError as exc:
+            print(
+                "[game_launcher] Could not identify latest "
+                f"session file: {exc}"
+            )
+            return
 
         print(
-            "[game_launcher] Latest Unity session: "
+            "[game_launcher] Importing Unity session: "
             f"{latest_file}"
         )
 
@@ -298,6 +405,11 @@ class GameLauncher(QObject):
                 str(latest_file),
                 self._user_id,
             )
+
+            print(
+                "[game_launcher] Session import completed."
+            )
+
         except Exception as exc:
             print(
                 "[game_launcher] Session import failed: "

@@ -2,24 +2,28 @@
 """
 Games View for RehabQuest
 -------------------------
-Four expandable rehabilitation categories with two simple games each.
+Expandable rehabilitation categories with two games per category.
 Reach & Collect retains its existing game launch ID.
+Only implemented games are enabled for launching.
 """
 
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QGridLayout,
     QLabel,
     QPushButton,
     QFrame,
-    QMessageBox,
     QScrollArea,
     QSizePolicy,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QFont, QLinearGradient
+from PyQt6.QtGui import (
+    QPainter,
+    QColor,
+    QFont,
+    QLinearGradient,
+)
 
 
 PURPLE = "#7E5BE8"
@@ -42,7 +46,7 @@ class GameCard(QFrame):
         tag,
         description,
         button_text,
-        is_primary=True,
+        is_primary=False,
         parent=None,
     ):
         super().__init__(parent)
@@ -50,14 +54,18 @@ class GameCard(QFrame):
         self.game_id = game_id
         self.is_primary = is_primary
 
-        self.setMinimumSize(240, 250)
+        self.setMinimumSize(220, 230)
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Minimum,
         )
 
         self._build_ui(
-            icon, title, tag, description, button_text
+            icon,
+            title,
+            tag,
+            description,
+            button_text,
         )
 
     def paintEvent(self, event):
@@ -80,26 +88,33 @@ class GameCard(QFrame):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(gradient)
         painter.drawRoundedRect(self.rect(), 18, 18)
-
-        super().paintEvent(event)
+        painter.end()
 
     def _build_ui(
-        self, icon, title, tag, description, button_text
+        self,
+        icon,
+        title,
+        tag,
+        description,
+        button_text,
     ):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(9)
 
-        top = QHBoxLayout()
+        top = QGridLayout()
 
         icon_label = QLabel(icon)
         icon_label.setStyleSheet(
             "font-size: 24px; background: transparent;"
         )
-        top.addWidget(icon_label)
-        top.addStretch()
+        top.addWidget(icon_label, 0, 0)
+        top.setColumnStretch(1, 1)
 
         tag_label = QLabel(tag)
+        tag_label.setAlignment(
+            Qt.AlignmentFlag.AlignCenter
+        )
         tag_label.setStyleSheet(f"""
             color: {PURPLE if self.is_primary else "#9A73C9"};
             background: rgba(126, 91, 232, 25);
@@ -108,7 +123,11 @@ class GameCard(QFrame):
             font-size: 9px;
             font-weight: bold;
         """)
-        top.addWidget(tag_label)
+        top.addWidget(
+            tag_label, 0, 2,
+            Qt.AlignmentFlag.AlignRight,
+        )
+
         layout.addLayout(top)
 
         title_label = QLabel(title)
@@ -148,22 +167,24 @@ class GameCard(QFrame):
                 font-size: 11px;
                 font-weight: bold;
             }
+
             QPushButton:hover {
                 background: #8E6BF8;
             }
+
             QPushButton:disabled {
                 background: #EAE4F2;
                 color: #8C80A4;
             }
         """)
 
+        button.setEnabled(self.is_primary)
+
         if self.is_primary:
             button.clicked.connect(
                 lambda checked=False:
                 self.start_clicked.emit(self.game_id)
             )
-        else:
-            button.setEnabled(False)
 
         layout.addWidget(button)
 
@@ -208,9 +229,7 @@ class ExerciseCategory(QFrame):
         root.setContentsMargins(15, 14, 15, 14)
         root.setSpacing(9)
 
-        self.toggle_button = QPushButton(
-            f"{icon}   {title}   ▾"
-        )
+        self.toggle_button = QPushButton()
         self.toggle_button.setCursor(
             Qt.CursorShape.PointingHandCursor
         )
@@ -225,6 +244,7 @@ class ExerciseCategory(QFrame):
                 font-weight: bold;
                 padding: 4px;
             }
+
             QPushButton:hover {
                 color: #7E5BE8;
             }
@@ -247,7 +267,9 @@ class ExerciseCategory(QFrame):
             "background: transparent; border: none;"
         )
 
-        games_layout = QVBoxLayout(self.games_container)
+        games_layout = QVBoxLayout(
+            self.games_container
+        )
         games_layout.setContentsMargins(0, 5, 0, 0)
         games_layout.setSpacing(10)
 
@@ -260,6 +282,7 @@ class ExerciseCategory(QFrame):
                 description=game["description"],
                 button_text=game["button"],
                 is_primary=game.get("active", False),
+                parent=self.games_container,
             )
 
             card.start_clicked.connect(
@@ -270,16 +293,19 @@ class ExerciseCategory(QFrame):
         root.addWidget(self.games_container)
         self.games_container.hide()
 
+        self.set_expanded(False)
+
     def toggle(self):
         self.expanded_changed.emit(
-            self, not self.expanded
+            self,
+            not self.expanded,
         )
 
     def set_expanded(self, expanded):
-        self.expanded = expanded
-        self.games_container.setVisible(expanded)
+        self.expanded = bool(expanded)
+        self.games_container.setVisible(self.expanded)
 
-        arrow = "▴" if expanded else "▾"
+        arrow = "▴" if self.expanded else "▾"
         self.toggle_button.setText(
             f"{self.category_icon}   "
             f"{self.category_title}   {arrow}"
@@ -332,12 +358,14 @@ class GamesView(QWidget):
                 background: transparent;
                 border: none;
             }
+
             QScrollBar:vertical {
                 background: #F2ECFA;
                 width: 8px;
                 margin: 2px;
                 border-radius: 4px;
             }
+
             QScrollBar::handle:vertical {
                 background: #C5B1EE;
                 min-height: 25px;
@@ -374,9 +402,9 @@ class GamesView(QWidget):
                         "title": "Reach & Collect",
                         "status": "AVAILABLE",
                         "description": (
-                            "Move your hand toward targets on the "
-                            "screen and collect them using the "
-                            "existing hand-tracking game."
+                            "Move your hand toward targets and "
+                            "collect them using the existing "
+                            "hand-tracking game."
                         ),
                         "button": "▶ Start Exercise",
                         "active": True,
@@ -387,8 +415,8 @@ class GamesView(QWidget):
                         "title": "Finger Tap Challenge",
                         "status": "PLANNED",
                         "description": (
-                            "Touch or pinch virtual targets with "
-                            "your fingers as they appear on screen."
+                            "Touch virtual targets with your "
+                            "fingers as they appear on screen."
                         ),
                         "button": "Coming Soon",
                     },
@@ -408,8 +436,8 @@ class GamesView(QWidget):
                         "title": "Sky Reach",
                         "status": "PLANNED",
                         "description": (
-                            "Raise your tracked hand to reach "
-                            "targets at different screen heights."
+                            "Reach toward targets at different "
+                            "screen heights."
                         ),
                         "button": "Coming Soon",
                     },
@@ -419,8 +447,8 @@ class GamesView(QWidget):
                         "title": "Rainbow Painter",
                         "status": "PLANNED",
                         "description": (
-                            "Move your hand to follow a path and "
-                            "draw colourful lines on the screen."
+                            "Follow a visual path and draw "
+                            "colourful lines on screen."
                         ),
                         "button": "Coming Soon",
                     },
@@ -440,8 +468,8 @@ class GamesView(QWidget):
                         "title": "Knee Lift Quest",
                         "status": "PLANNED",
                         "description": (
-                            "Lift one knee toward a target zone "
-                            "detected using body landmarks."
+                            "Lift your knee toward a target zone "
+                            "using body landmark tracking."
                         ),
                         "button": "Coming Soon",
                     },
@@ -451,8 +479,8 @@ class GamesView(QWidget):
                         "title": "Step & Reach",
                         "status": "PLANNED",
                         "description": (
-                            "Alternate steps while reaching toward "
-                            "visual targets in a guided sequence."
+                            "Alternate steps while reaching "
+                            "toward visual targets."
                         ),
                         "button": "Coming Soon",
                     },
@@ -517,19 +545,27 @@ class GamesView(QWidget):
             category.set_expanded(False)
 
     def _on_category_toggled(
-        self, selected_category, should_expand
+        self,
+        selected_category,
+        should_expand,
     ):
-        # Expand one category at a time.
+        """Allow one exercise category to be expanded at a time."""
         for category in self.categories:
             category.set_expanded(
                 category is selected_category
                 and should_expand
             )
 
-    
     def open_category(self, category_id):
-        """Expand the exercise category selected from the Home dashboard."""
+        """
+        Expand a category selected from the Home dashboard.
 
+        Supported IDs:
+            wrist_hand
+            shoulder_elbow
+            knee_lower_limb
+            trunk_posture
+        """
         category_titles = {
             "wrist_hand": "Wrist & Hand",
             "shoulder_elbow": "Shoulder & Elbow",
@@ -539,12 +575,20 @@ class GamesView(QWidget):
 
         target_title = category_titles.get(category_id)
 
-        if not target_title:
+        if target_title is None:
             return
 
+        target_category = None
+
         for category in self.categories:
-            is_target = category.category_title == target_title
+            is_target = (
+                category.category_title == target_title
+            )
             category.set_expanded(is_target)
 
-        self._on_category_toggled(None, True)
+            if is_target:
+                target_category = category
 
+        if target_category is not None:
+            target_category.ensurePolished()
+            target_category.updateGeometry()

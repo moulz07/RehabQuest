@@ -1,0 +1,26 @@
+[
+  {
+    "user_id": "PATIENT_01",
+    "name": "Alex Mercer",
+    "role": "Patient",
+    "created_at": "2026-10-22T17:25:05.374320"
+  },
+  {
+    "user_id": "DEMO_PATIENT",
+    "name": "Demo User",
+    "role": "Patient",
+    "created_at": "2026-10-22T17:25:05.374320"
+  },
+  {
+    "user_id": "1",
+    "name": "mk",
+    "role": "Patient",
+    "created_at": "2026-10-22T17:26:48.902637"
+  },
+  {
+    "user_id": "2",
+    "name": "rasa",
+    "role": "Patient",
+    "created_at": "2026-10-22T18:05:57.193771"
+  }
+]

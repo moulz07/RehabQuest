@@ -2,8 +2,8 @@
 """
 Home View for RehabQuest
 ------------------------
-Gaming-inspired dashboard with patient greeting, exercise categories,
-performance metrics, weekly activity and progress overview.
+Patient dashboard with exercise categories, session metrics,
+weekly activity, streak tracking, and recovery progress.
 """
 
 from datetime import date
@@ -19,7 +19,12 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QProgressBar,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QPointF, QRectF
+from PyQt6.QtCore import (
+    Qt,
+    pyqtSignal,
+    QPointF,
+    QRectF,
+)
 from PyQt6.QtGui import (
     QFont,
     QPainter,
@@ -36,6 +41,8 @@ from local_data import (
     get_current_streak,
     get_weekly_session_days,
     get_random_quote,
+    get_latest_session_summary,
+    get_total_sessions,
 )
 from weekly_activity import WeeklyActivityCard
 
@@ -57,7 +64,7 @@ LAVENDER = "#EEE8FF"
 
 
 def make_label(text, size=11, color=DARK, bold=False):
-    label = QLabel(text)
+    label = QLabel(str(text))
     font = QFont("Segoe UI", size)
     font.setBold(bold)
     label.setFont(font)
@@ -98,10 +105,15 @@ class DashboardHeroCard(QFrame):
 
     def paintEvent(self, event):
         width, height = self.width(), self.height()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        gradient = QLinearGradient(0, 0, width * 0.8, height)
+        painter = QPainter(self)
+        painter.setRenderHint(
+            QPainter.RenderHint.Antialiasing
+        )
+
+        gradient = QLinearGradient(
+            0, 0, width * 0.8, height
+        )
         gradient.setColorAt(0, QColor("#6D4BDB"))
         gradient.setColorAt(0.55, QColor("#8869EC"))
         gradient.setColorAt(1, QColor("#B18AF3"))
@@ -111,8 +123,11 @@ class DashboardHeroCard(QFrame):
         painter.drawRoundedRect(self.rect(), 22, 22)
 
         painter.save()
+
         path = QPainterPath()
-        path.addRoundedRect(QRectF(0, 0, width, height), 22, 22)
+        path.addRoundedRect(
+            QRectF(0, 0, width, height), 22, 22
+        )
         painter.setClipPath(path)
 
         glow = QRadialGradient(
@@ -130,10 +145,14 @@ class DashboardHeroCard(QFrame):
         )
 
         draw_star_field(
-            painter, width, height * 0.8,
-            count=16, seed=7,
+            painter,
+            width,
+            height * 0.8,
+            count=16,
+            seed=7,
             color=QColor(235, 225, 255),
         )
+
         painter.restore()
         painter.end()
 
@@ -145,18 +164,18 @@ class DashboardHeroCard(QFrame):
         left = QVBoxLayout()
         left.setSpacing(7)
 
-        date_label = QLabel(
+        self.date_label = QLabel()
+        self.date_label.setText(
             date.today().strftime("%A, %B %d, %Y").upper()
         )
-        date_label.setStyleSheet("""
+        self.date_label.setStyleSheet("""
             color: #EEE7FF;
             background: transparent;
             border: none;
             font-size: 9px;
             font-weight: bold;
-            letter-spacing: 1px;
         """)
-        left.addWidget(date_label)
+        left.addWidget(self.date_label)
 
         self._greeting_label = QLabel(
             f"Welcome back,\n{self._user_name}!"
@@ -173,9 +192,11 @@ class DashboardHeroCard(QFrame):
             "Move, play and recover — one achievement at a time."
         )
         description.setWordWrap(True)
-        description.setStyleSheet(
-            "color: #F2EDFF; background: transparent; font-size: 11px;"
-        )
+        description.setStyleSheet("""
+            color: #F2EDFF;
+            background: transparent;
+            font-size: 11px;
+        """)
         left.addWidget(description)
         left.addStretch()
 
@@ -194,7 +215,9 @@ class DashboardHeroCard(QFrame):
         left.addWidget(self._streak_text)
 
         play_button = QPushButton("▶  Start Daily Session")
-        play_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        play_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
         play_button.setMinimumHeight(42)
         play_button.setStyleSheet("""
             QPushButton {
@@ -206,10 +229,16 @@ class DashboardHeroCard(QFrame):
                 font-size: 12px;
                 font-weight: bold;
             }
-            QPushButton:hover { background: #F2ECFF; }
+            QPushButton:hover {
+                background: #F2ECFF;
+            }
         """)
-        play_button.clicked.connect(self.play_now_clicked.emit)
-        left.addWidget(play_button, 0, Qt.AlignmentFlag.AlignLeft)
+        play_button.clicked.connect(
+            self.play_now_clicked.emit
+        )
+        left.addWidget(
+            play_button, 0, Qt.AlignmentFlag.AlignLeft
+        )
 
         layout.addLayout(left, 1)
 
@@ -223,17 +252,22 @@ class DashboardHeroCard(QFrame):
                 border-radius: 22px;
             }
         """)
+
         art_layout = QVBoxLayout(art)
 
         game_icon = QLabel("🎮")
-        game_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        game_icon.setAlignment(
+            Qt.AlignmentFlag.AlignCenter
+        )
         game_icon.setStyleSheet(
             "font-size: 48px; background: transparent; border: none;"
         )
         art_layout.addWidget(game_icon)
 
         caption = QLabel("YOUR NEXT\nACHIEVEMENT")
-        caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        caption.setAlignment(
+            Qt.AlignmentFlag.AlignCenter
+        )
         caption.setStyleSheet("""
             color: white;
             background: transparent;
@@ -242,16 +276,23 @@ class DashboardHeroCard(QFrame):
             font-weight: bold;
         """)
         art_layout.addWidget(caption)
-        layout.addWidget(art, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        layout.addWidget(
+            art, 0, Qt.AlignmentFlag.AlignVCenter
+        )
 
     def set_user(self, name, streak):
-        self._user_name = name
-        self._streak = streak
-        self._greeting_label.setText(f"Welcome back,\n{name}!")
+        self._user_name = name or "Patient"
+        self._streak = max(0, int(streak or 0))
 
-        if streak > 0:
+        self._greeting_label.setText(
+            f"Welcome back,\n{self._user_name}!"
+        )
+
+        if self._streak > 0:
             self._streak_text.setText(
-                f"🔥 {streak}-day streak! Keep your progress going."
+                f"🔥 {self._streak}-day streak! "
+                "Keep your progress going."
             )
         else:
             self._streak_text.setText(
@@ -267,20 +308,32 @@ class ExerciseCategoryCard(QFrame):
     category_clicked = pyqtSignal(str)
 
     def __init__(
-        self, category_id, icon, title, body_parts,
-        description, accent, light, game_count=2, parent=None,
+        self,
+        category_id,
+        icon,
+        title,
+        body_parts,
+        description,
+        accent,
+        light,
+        game_count=1,
+        parent=None,
     ):
         super().__init__(parent)
-        self.category_id = category_id
 
+        self.category_id = category_id
         self.setMinimumHeight(150)
+
         self.setStyleSheet(f"""
             QFrame {{
                 background: {light};
                 border: 1px solid {accent}55;
                 border-radius: 17px;
             }}
-            QLabel {{ background: transparent; border: none; }}
+            QLabel {{
+                background: transparent;
+                border: none;
+            }}
         """)
 
         layout = QVBoxLayout(self)
@@ -290,7 +343,9 @@ class ExerciseCategoryCard(QFrame):
         top = QHBoxLayout()
 
         icon_label = QLabel(icon)
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setAlignment(
+            Qt.AlignmentFlag.AlignCenter
+        )
         icon_label.setFixedSize(38, 38)
         icon_label.setStyleSheet(f"""
             background: {accent};
@@ -301,7 +356,7 @@ class ExerciseCategoryCard(QFrame):
         top.addWidget(icon_label)
         top.addStretch()
 
-        count_label = QLabel(f"{game_count} GAMES")
+        count_label = QLabel(f"{game_count} GAME")
         count_label.setStyleSheet(f"""
             color: {accent};
             background: white;
@@ -313,8 +368,12 @@ class ExerciseCategoryCard(QFrame):
         top.addWidget(count_label)
         layout.addLayout(top)
 
-        layout.addWidget(make_label(title, 13, DARK, True))
-        layout.addWidget(make_label(body_parts, 9, accent, True))
+        layout.addWidget(
+            make_label(title, 13, DARK, True)
+        )
+        layout.addWidget(
+            make_label(body_parts, 9, accent, True)
+        )
 
         detail = make_label(description, 9, MUTED)
         detail.setWordWrap(True)
@@ -322,7 +381,9 @@ class ExerciseCategoryCard(QFrame):
         layout.addStretch()
 
         button = QPushButton("Explore games   →")
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
         button.setStyleSheet(f"""
             QPushButton {{
                 background: white;
@@ -334,10 +395,11 @@ class ExerciseCategoryCard(QFrame):
                 font-size: 10px;
                 font-weight: bold;
             }}
-            QPushButton:hover {{ background: {light}; }}
+            QPushButton:hover {{
+                background: {light};
+            }}
         """)
 
-        # Emit the selected category ID when clicked.
         button.clicked.connect(
             lambda checked=False, cid=category_id:
             self.category_clicked.emit(cid)
@@ -350,8 +412,17 @@ class ExerciseCategoryCard(QFrame):
 # ---------------------------------------------------------
 
 class PerformanceMetricCard(QFrame):
-    def __init__(self, icon, title, value, detail, accent, parent=None):
+    def __init__(
+        self,
+        icon,
+        title,
+        value,
+        detail,
+        accent,
+        parent=None,
+    ):
         super().__init__(parent)
+
         self.setMinimumHeight(100)
         self.setStyleSheet(f"""
             QFrame {{
@@ -359,7 +430,10 @@ class PerformanceMetricCard(QFrame):
                 border: 1px solid {BORDER};
                 border-radius: 15px;
             }}
-            QLabel {{ background: transparent; border: none; }}
+            QLabel {{
+                background: transparent;
+                border: none;
+            }}
         """)
 
         layout = QVBoxLayout(self)
@@ -378,73 +452,133 @@ class PerformanceMetricCard(QFrame):
 
 
 # ---------------------------------------------------------
-# Progress chart
+# Progress trend chart
 # ---------------------------------------------------------
 
 class ProgressTrendChart(QWidget):
+    """
+    Lightweight trend chart.
+
+    Empty data is shown as unavailable rather than inventing
+    a recovery trend. Values should be actual session scores
+    normalized to the 0-100 range.
+    """
+
     def __init__(self, values=None, parent=None):
         super().__init__(parent)
-        self.values = values or [46, 62, 76, 87]
+        self.values = list(values) if values else []
         self.setMinimumHeight(145)
+
+    def set_values(self, values):
+        self.values = list(values) if values else []
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(
+            QPainter.RenderHint.Antialiasing
+        )
+
         rect = self.rect().adjusted(26, 12, -12, -26)
 
         if rect.width() <= 0 or rect.height() <= 0:
+            painter.end()
             return
 
-        painter.setPen(QPen(QColor("#EEEAF5"), 1))
+        if not self.values:
+            painter.setPen(QColor(MUTED))
+            painter.setFont(QFont("Segoe UI", 10))
+            painter.drawText(
+                self.rect(),
+                Qt.AlignmentFlag.AlignCenter,
+                "Complete a session to see your progress.",
+            )
+            painter.end()
+            return
+
+        values = [
+            max(0.0, min(100.0, float(value)))
+            for value in self.values
+            if value is not None
+        ]
+
+        if not values:
+            painter.setPen(QColor(MUTED))
+            painter.drawText(
+                self.rect(),
+                Qt.AlignmentFlag.AlignCenter,
+                "Progress data unavailable.",
+            )
+            painter.end()
+            return
+
         painter.setFont(QFont("Segoe UI", 8))
 
         for value in (0, 25, 50, 75, 100):
             y = rect.bottom() - value / 100 * rect.height()
+
+            painter.setPen(QPen(QColor("#EEEAF5"), 1))
             painter.drawLine(
-                QPointF(rect.left(), y), QPointF(rect.right(), y)
+                QPointF(rect.left(), y),
+                QPointF(rect.right(), y),
             )
+
             painter.setPen(QColor(MUTED))
             painter.drawText(
                 QRectF(0, y - 7, 22, 14),
-                Qt.AlignmentFlag.AlignRight, str(value),
+                Qt.AlignmentFlag.AlignRight,
+                str(value),
             )
-            painter.setPen(QPen(QColor("#EEEAF5"), 1))
 
         points = []
-        for index, value in enumerate(self.values):
-            x = rect.left() + rect.width() * index / max(
-                1, len(self.values) - 1
+
+        for index, value in enumerate(values):
+            x = rect.left() + (
+                rect.width() * index / max(1, len(values) - 1)
             )
             y = rect.bottom() - value / 100 * rect.height()
             points.append(QPointF(x, y))
 
         if len(points) >= 2:
-            polygon = [QPointF(points[0].x(), rect.bottom())]
+            polygon = [
+                QPointF(points[0].x(), rect.bottom())
+            ]
             polygon.extend(points)
-            polygon.append(QPointF(points[-1].x(), rect.bottom()))
+            polygon.append(
+                QPointF(points[-1].x(), rect.bottom())
+            )
+
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(121, 87, 232, 30))
             painter.drawPolygon(QPolygonF(polygon))
 
         painter.setPen(QPen(QColor(PURPLE), 3))
+
         for index in range(len(points) - 1):
-            painter.drawLine(points[index], points[index + 1])
+            painter.drawLine(
+                points[index], points[index + 1]
+            )
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(PURPLE))
+
         for point in points:
             painter.drawEllipse(point, 4, 4)
 
         painter.setPen(QColor(MUTED))
         painter.setFont(QFont("Segoe UI", 8))
-        for index in range(len(self.values)):
-            x = rect.left() + rect.width() * index / max(
-                1, len(self.values) - 1
+
+        for index in range(len(values)):
+            x = rect.left() + (
+                rect.width() * index / max(1, len(values) - 1)
             )
             painter.drawText(
                 QRectF(x - 28, rect.bottom() + 7, 56, 16),
-                Qt.AlignmentFlag.AlignHCenter, f"Week {index + 1}",
+                Qt.AlignmentFlag.AlignHCenter,
+                f"S{index + 1}",
             )
+
+        painter.end()
 
 
 # ---------------------------------------------------------
@@ -453,20 +587,19 @@ class ProgressTrendChart(QWidget):
 
 class HomeView(QWidget):
     play_requested = pyqtSignal()
-
-    # Emits a category ID so the main window can open Games.
     category_requested = pyqtSignal(str)
-
-    # Emits when any Explore games button is clicked.
     games_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self._user_id = None
         self._build_ui()
 
     def _build_ui(self):
-        self.setStyleSheet(f"background: {BG};")
+        self.setStyleSheet(
+            f"background: {BG};"
+        )
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 10, 12, 10)
@@ -476,13 +609,21 @@ class HomeView(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet("""
-            QScrollArea { background: transparent; border: none; }
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+
             QScrollBar:vertical {
-                background: #EEEAF7; width: 8px; margin: 2px;
+                background: #EEEAF7;
+                width: 8px;
+                margin: 2px;
                 border-radius: 4px;
             }
+
             QScrollBar::handle:vertical {
-                background: #C9B9F4; min-height: 25px;
+                background: #C9B9F4;
+                min-height: 25px;
                 border-radius: 4px;
             }
         """)
@@ -496,23 +637,32 @@ class HomeView(QWidget):
         page.setContentsMargins(2, 2, 8, 10)
         page.setSpacing(14)
 
-        # Header row
+        # Header
         header_row = QHBoxLayout()
         title_column = QVBoxLayout()
         title_column.setSpacing(4)
+
         title_column.addWidget(
-            make_label("Your RehabQuest Adventure", 21, DARK, True)
+            make_label(
+                "Your RehabQuest Adventure", 21, DARK, True
+            )
         )
+
         subtitle = make_label(
             "Interactive rehabilitation powered by your movements.",
-            10, MUTED,
+            10,
+            MUTED,
         )
         subtitle.setWordWrap(True)
         title_column.addWidget(subtitle)
+
         header_row.addLayout(title_column, 1)
 
         self.date_card = self._make_info_card(
-            "📅", "TODAY", date.today().strftime("%b %d, %Y"), PURPLE
+            "📅",
+            "TODAY",
+            date.today().strftime("%b %d, %Y"),
+            PURPLE,
         )
         header_row.addWidget(self.date_card)
 
@@ -527,13 +677,17 @@ class HomeView(QWidget):
         # Hero
         self.hero = DashboardHeroCard(self)
         self.hero.setMinimumHeight(205)
-        self.hero.play_now_clicked.connect(self.play_requested.emit)
+        self.hero.play_now_clicked.connect(
+            self.play_requested.emit
+        )
         page.addWidget(self.hero)
 
         # Exercise categories
         category_heading = QHBoxLayout()
         category_heading.addWidget(
-            make_label("Choose an Exercise Category", 15, DARK, True)
+            make_label(
+                "Choose an Exercise Category", 15, DARK, True
+            )
         )
         category_heading.addStretch()
         category_heading.addWidget(
@@ -546,33 +700,48 @@ class HomeView(QWidget):
 
         categories = [
             (
-                "wrist_hand", "🎯", "Wrist & Hand",
+                "wrist_hand",
+                "🎯",
+                "Wrist & Hand",
                 "Wrist • Fingers • Hand",
                 "Reach, point and practise hand control.",
-                PURPLE, LAVENDER,
+                PURPLE,
+                LAVENDER,
             ),
             (
-                "shoulder_elbow", "💪", "Shoulder & Elbow",
+                "shoulder_elbow",
+                "💪",
+                "Shoulder & Elbow",
                 "Shoulder • Arm • Elbow",
                 "Build controlled arm-reaching movements.",
-                TEAL, TEAL_LIGHT,
+                TEAL,
+                TEAL_LIGHT,
             ),
             (
-                "knee_lower_limb", "👣", "Knee & Lower Limb",
+                "knee_lower_limb",
+                "👣",
+                "Knee & Lower Limb",
                 "Knee • Leg • Stepping",
                 "Practise knee lifts and stepping tasks.",
-                ORANGE, ORANGE_LIGHT,
+                ORANGE,
+                ORANGE_LIGHT,
             ),
             (
-                "trunk_posture", "🧍", "Trunk & Posture",
+                "trunk_posture",
+                "🧍",
+                "Trunk & Posture",
                 "Trunk • Balance • Stability",
                 "Work on posture and controlled movement.",
-                PINK, PINK_LIGHT,
+                PINK,
+                PINK_LIGHT,
             ),
         ]
 
         for column, data in enumerate(categories):
-            category = ExerciseCategoryCard(*data)
+            category = ExerciseCategoryCard(
+                *data,
+                game_count=1,
+            )
             category.category_clicked.connect(
                 self._on_explore_games_clicked
             )
@@ -583,11 +752,11 @@ class HomeView(QWidget):
         # Performance metrics
         performance_heading = QHBoxLayout()
         performance_heading.addWidget(
-            make_label("Today's Performance", 15, DARK, True)
+            make_label("Latest Session Performance", 15, DARK, True)
         )
         performance_heading.addStretch()
         performance_heading.addWidget(
-            make_label("LIVE DATA WHEN CONNECTED", 8, PURPLE, True)
+            make_label("FROM RECORDED SESSION", 8, PURPLE, True)
         )
         page.addLayout(performance_heading)
 
@@ -596,20 +765,32 @@ class HomeView(QWidget):
 
         self.metric_cards = [
             PerformanceMetricCard(
-                "🏆", "MOVEMENT SCORE", "--",
-                "Waiting for session data", PURPLE,
+                "🏆",
+                "GAME SCORE",
+                "--",
+                "Latest session",
+                PURPLE,
             ),
             PerformanceMetricCard(
-                "🎯", "ACCURACY", "--",
-                "Target accuracy", TEAL,
+                "🎯",
+                "ACCURACY",
+                "--",
+                "Targets collected",
+                TEAL,
             ),
             PerformanceMetricCard(
-                "↗", "RANGE OF MOTION", "--",
-                "Joint movement", ORANGE,
+                "↗",
+                "RANGE OF MOTION",
+                "--",
+                "Recorded ROM",
+                ORANGE,
             ),
             PerformanceMetricCard(
-                "⏱", "SESSION TIME", "--",
-                "Exercise duration", PINK,
+                "⏱",
+                "SESSION TIME",
+                "--",
+                "Recorded duration",
+                PINK,
             ),
         ]
 
@@ -618,7 +799,7 @@ class HomeView(QWidget):
 
         page.addLayout(metrics_grid)
 
-        # Activity and progress
+        # Weekly activity and progress
         bottom_grid = QGridLayout()
         bottom_grid.setSpacing(12)
 
@@ -636,23 +817,26 @@ class HomeView(QWidget):
         )
         progress_header.addStretch()
         progress_header.addWidget(
-            make_label("RECENT WEEKS", 8, PURPLE, True)
+            make_label("RECENT SESSIONS", 8, PURPLE, True)
         )
         progress_layout.addLayout(progress_header)
 
         progress_layout.addWidget(
             make_label(
-                "Illustrative trend until real session scores are connected.",
-                9, MUTED,
+                "Movement accuracy across recent sessions.",
+                9,
+                MUTED,
             )
         )
-        progress_layout.addWidget(
-            ProgressTrendChart([46, 62, 76, 87])
-        )
+
+        self.progress_chart = ProgressTrendChart()
+        progress_layout.addWidget(self.progress_chart)
 
         self.progress_summary = make_label(
             "Complete a session to start tracking your progress.",
-            9, TEAL, True,
+            9,
+            TEAL,
+            True,
         )
         self.progress_summary.setWordWrap(True)
         progress_layout.addWidget(self.progress_summary)
@@ -660,12 +844,14 @@ class HomeView(QWidget):
         bottom_grid.addWidget(progress_card, 0, 1)
         bottom_grid.setColumnStretch(0, 1)
         bottom_grid.setColumnStretch(1, 1)
+
         page.addLayout(bottom_grid)
 
         footer = make_label(
             "RehabQuest is a rehabilitation-support prototype. "
             "Follow appropriate exercises and professional guidance.",
-            9, MUTED,
+            9,
+            MUTED,
         )
         footer.setWordWrap(True)
         page.addWidget(footer)
@@ -713,10 +899,14 @@ class HomeView(QWidget):
         self.xp_bar.setFixedHeight(7)
         self.xp_bar.setStyleSheet("""
             QProgressBar {
-                background: #E9E4F5; border: none; border-radius: 3px;
+                background: #E9E4F5;
+                border: none;
+                border-radius: 3px;
             }
+
             QProgressBar::chunk {
-                background: #7957E8; border-radius: 3px;
+                background: #7957E8;
+                border-radius: 3px;
             }
         """)
         layout.addWidget(self.xp_bar)
@@ -724,18 +914,24 @@ class HomeView(QWidget):
         return card
 
     def _on_explore_games_clicked(self, category_id):
-        """Request navigation to Games and pass the selected category."""
+        """Notify the dashboard of the selected category."""
         self.category_requested.emit(category_id)
         self.games_requested.emit()
 
     def refresh_for_user(self, user_id, name="Patient"):
+        """Refresh dashboard widgets from local session history."""
         self._user_id = user_id
 
         streak = get_current_streak(user_id)
         self.hero.set_user(name, streak)
+
         self.weekly.set_sessions(
             get_weekly_session_days(user_id)
         )
+
+        self.date_card.findChild(
+            QLabel, "infoValue"
+        ).setText(date.today().strftime("%b %d, %Y"))
 
         streak_label = self.streak_card.findChild(
             QLabel, "infoValue"
@@ -743,8 +939,66 @@ class HomeView(QWidget):
         if streak_label:
             streak_label.setText(f"{streak} Days")
 
-        # Refresh the daily quote data, retaining compatibility with local_data.
-        get_random_quote()
+        # Show the latest actual session, if available.
+        latest = get_latest_session_summary(
+            user_id, "reach_and_collect"
+        )
+
+        if latest:
+            score = latest.get("score")
+            accuracy = latest.get("accuracy")
+            rom = latest.get("rom")
+            duration = latest.get("session_duration")
+
+            values = [
+                str(score) if score is not None else "--",
+                f"{accuracy:.1f}%" if isinstance(
+                    accuracy, (int, float)
+                ) else "--",
+                f"{rom:.1f}°" if isinstance(
+                    rom, (int, float)
+                ) else "--",
+                f"{duration:.0f} sec" if isinstance(
+                    duration, (int, float)
+                ) else "--",
+            ]
+
+            for card, value in zip(self.metric_cards, values):
+                card.value_label.setText(value)
+        else:
+            for card in self.metric_cards:
+                card.value_label.setText("--")
+
+        # Plot real accuracy values rather than a hardcoded trend.
+        sessions = []
+        if user_id:
+            from local_data import get_session_history
+            sessions = get_session_history(
+                user_id, "reach_and_collect"
+            ) or []
+
+        valid_sessions = [
+            session for session in sessions
+            if isinstance(session.get("accuracy"), (int, float))
+        ]
+
+        recent_sessions = valid_sessions[-4:]
+        self.progress_chart.set_values(
+            [session["accuracy"] for session in recent_sessions]
+        )
+
+        if recent_sessions:
+            self.progress_summary.setText(
+                f"{len(valid_sessions)} session(s) with recorded "
+                "accuracy data."
+            )
+        else:
+            self.progress_summary.setText(
+                "Complete a session to start tracking your progress."
+            )
+
+        # Keep the existing quote utility available for the home view.
+        self._motivation_quote = get_random_quote()
 
     def set_xp_progress(self, current_xp, xp_goal=500):
         xp_goal = max(1, int(xp_goal))
