@@ -334,9 +334,10 @@ public class ReachAndCollectGameManager : MonoBehaviour
     {
         Time.timeScale = 1f;
 
-        SceneManager.LoadScene(
-            SampleSceneName
-        );
+        Debug.Log("Returning to RehabQuest dashboard...");
+
+    // Close the standalone Unity game.
+        Application.Quit();
     }
 
 
