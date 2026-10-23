@@ -1,4 +1,3 @@
-
 """
 RehabQuest - Main Desktop Application
 -------------------------------------
