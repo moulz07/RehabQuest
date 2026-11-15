@@ -33,13 +33,13 @@ public class ReachAndCollectGameManager : MonoBehaviour
     [SerializeField] private float minimumDistanceFromHand = 0.45f;
 
     [Header("Target Visuals")]
-    [SerializeField] private float targetDiameter = 0.70f;
-    [SerializeField] private float minimumTargetDiameter = 0.55f;
+    [SerializeField] private float targetDiameter = 0.95f;
+    [SerializeField] private float minimumTargetDiameter = 0.75f;
     [SerializeField] private float targetPulseSpeed = 5f;
     [SerializeField] private float targetPulseAmount = 0.12f;
 
     [SerializeField]
-    private Color targetColor = new Color(0.15f, 0.95f, 0.75f);
+    private Color targetColor = new Color(1.0f, 0.75f, 0.10f);
 
     [SerializeField]
     private Color targetMissColor = new Color(1f, 0.42f, 0.32f);

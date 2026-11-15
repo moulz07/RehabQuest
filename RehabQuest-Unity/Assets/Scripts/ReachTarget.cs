@@ -45,6 +45,15 @@ public class ReachTarget : MonoBehaviour
         if (targetRenderer != null)
         {
             targetRenderer.material.color = color;
+            if (targetRenderer.material.HasProperty("_BaseColor"))
+            {
+                targetRenderer.material.SetColor("_BaseColor", color);
+            }
+            if (targetRenderer.material.HasProperty("_EmissionColor"))
+            {
+                targetRenderer.material.EnableKeyword("_EMISSION");
+                targetRenderer.material.SetColor("_EmissionColor", color * 2.2f);
+            }
         }
 
         timeRemaining = lifetimeSeconds;
